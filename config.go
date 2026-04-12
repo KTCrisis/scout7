@@ -3,6 +3,7 @@ package scout7
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"time"
 
 	"gopkg.in/yaml.v3"
@@ -60,6 +61,16 @@ func LoadConfig(path string) (*Config, error) {
 
 	if err := yaml.Unmarshal(data, cfg); err != nil {
 		return nil, fmt.Errorf("parse config: %w", err)
+	}
+
+	// Resolve output_dir to absolute so arch7 writes diagrams where scout7 expects,
+	// regardless of which process's cwd resolves the path.
+	if !filepath.IsAbs(cfg.OutputDir) {
+		abs, err := filepath.Abs(cfg.OutputDir)
+		if err != nil {
+			return nil, fmt.Errorf("resolve output_dir: %w", err)
+		}
+		cfg.OutputDir = abs
 	}
 
 	if len(cfg.Search.Queries) == 0 {
