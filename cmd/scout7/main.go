@@ -45,7 +45,7 @@ func main() {
 			"searched", stats.Searched,
 			"fetched", stats.Fetched,
 			"extracted", stats.Extracted,
-			"diagrammed", stats.Diagrammed,
+			"produced", stats.Produced,
 			"skipped", stats.Skipped,
 			"errors", stats.Errors,
 		)

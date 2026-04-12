@@ -11,12 +11,12 @@ import (
 
 // Stats tracks results for a single run cycle.
 type Stats struct {
-	Searched   int
-	Fetched    int
-	Extracted  int
-	Diagrammed int
-	Skipped    int
-	Errors     int
+	Searched  int
+	Fetched   int
+	Extracted int
+	Produced  int
+	Skipped   int
+	Errors    int
 }
 
 // Run executes one full cycle: search -> filter -> fetch -> extract -> evaluate -> diagram -> store.
@@ -93,15 +93,15 @@ func Run(mc *mesh.Client, cfg *scout7.Config) (*Stats, error) {
 				Reason:   eval.Reason,
 			}
 
-			// Generate diagram if worthy.
+			// Produce output if worthy.
 			if eval.DiagramIt {
-				path, err := GenerateDiagram(mc, arch, cfg.OutputDir)
+				path, err := ProduceOutput(mc, arch, cfg.Output)
 				if err != nil {
-					slog.Warn("diagram generation failed", "name", arch.Name, "err", err)
+					slog.Warn("output generation failed", "name", arch.Name, "format", cfg.Output.Format, "err", err)
 					stats.Errors++
 				} else {
-					entry.DiagramPath = path
-					stats.Diagrammed++
+					entry.OutputPath = path
+					stats.Produced++
 				}
 			}
 
@@ -139,7 +139,7 @@ func Loop(mc *mesh.Client, cfg *scout7.Config) error {
 				"searched", stats.Searched,
 				"fetched", stats.Fetched,
 				"extracted", stats.Extracted,
-				"diagrammed", stats.Diagrammed,
+				"produced", stats.Produced,
 				"skipped", stats.Skipped,
 				"errors", stats.Errors,
 			)

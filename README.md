@@ -1,6 +1,8 @@
 # scout7
 
-Autonomous agent that monitors the agentic AI landscape, extracts architecture patterns, and generates Excalidraw diagrams.
+Autonomous web research agent. Searches the web, extracts structured information, and produces output via any MCP tool.
+
+Default use case: scout agentic AI architectures and generate Excalidraw diagrams.
 
 Built on [agent-mesh](https://github.com/KTCrisis/agent-mesh) — all tool access goes through policy, tracing, and approval.
 
@@ -12,7 +14,7 @@ Search (searxng)
   → Fetch article content (fetch)
   → Extract architecture (ollama/gemma4)
   → Evaluate novelty 0-10 (ollama/gemma4)
-  → Generate diagram if score >= threshold (arch7)
+  → Produce output if score >= threshold (configurable tool)
   → Store result in memory (mem7)
   → Sleep → repeat
 ```
@@ -25,8 +27,8 @@ One cycle processes all configured queries, then sleeps. Use `--once` to run a s
   - **searxng** — web search
   - **fetch** — URL content reader
   - **ollama** — local LLM (gemma4 or similar)
-  - **arch7** — Excalidraw diagram generator
   - **mem7** — persistent memory
+  - An **output tool** (default: arch7 for Excalidraw diagrams)
 - A `scout7` policy in agent-mesh granting access to these tools
 
 ## Install
@@ -42,10 +44,10 @@ Requires Go 1.23+.
 ## Usage
 
 ```bash
-# Single cycle — search, extract, evaluate, diagram, exit
+# Single cycle — search, extract, evaluate, output, exit
 make run-once
 
-# Continuous loop (default interval: 6h)
+# Continuous loop (default interval: 24h)
 make run
 
 # Or directly
@@ -57,15 +59,23 @@ make run
 ```yaml
 mesh_url: "http://localhost:9090"
 agent_id: "scout7"
-interval: 6h
-output_dir: "./diagrams"
+interval: 24h
+
+output:
+  tool: "arch7.create_diagram"
+  format: "diagram"
+  dir: "./diagrams"
+  extension: ".excalidraw"
+  params:
+    direction: "LR"
+    theme: "professional"
 
 search:
   queries:
     - "agentic AI architecture 2026"
     - "AI agent framework design pattern"
     - "multi-agent system architecture"
-  max_results: 5
+  max_results: 3
 
 evaluate:
   min_novelty_score: 7
@@ -74,15 +84,32 @@ ollama:
   model: "gemma4:e4b"
 ```
 
+### Output formats
+
+The `output` section controls how scout7 materializes results:
+
+| Format | Tool | Description |
+|--------|------|-------------|
+| `diagram` | `arch7.create_diagram` | Excalidraw diagrams (nodes/connections) |
+| `markdown` | `filesystem.write_file` | Structured markdown reports |
+| `json` | `filesystem.write_file` | Raw architecture JSON |
+| `memory` | `memory.memory_store` | Store directly in mem7 (no file) |
+
+### Config reference
+
 | Field | Description |
 |-------|-------------|
 | `mesh_url` | agent-mesh HTTP endpoint |
 | `agent_id` | Identity for policy evaluation (`Authorization: Bearer agent:scout7`) |
 | `interval` | Sleep between cycles in loop mode |
-| `output_dir` | Where `.excalidraw` diagrams are written |
+| `output.tool` | MCP tool to call for output |
+| `output.format` | Output format (`diagram`, `markdown`, `json`, `memory`) |
+| `output.dir` | Directory for file-based outputs |
+| `output.extension` | File extension |
+| `output.params` | Static params passed to the output tool |
 | `search.queries` | Search terms sent to searxng |
 | `search.max_results` | Results per query |
-| `evaluate.min_novelty_score` | Minimum score (0-10) to trigger diagram generation |
+| `evaluate.min_novelty_score` | Minimum score (0-10) to trigger output |
 | `ollama.model` | Ollama model for extraction and evaluation |
 
 ## agent-mesh policy
@@ -117,7 +144,7 @@ scout7/
     llm.go               ollama chat helpers
     extract.go           extract architecture from article text
     evaluate.go          judge relevance, novelty, quality
-    diagram.go           generate arch7 Excalidraw diagrams
+    output.go            pluggable output (diagram, markdown, json, memory)
     memory.go            mem7 read/write (seen URLs, store results)
   mesh/
     client.go            agent-mesh HTTP client
@@ -126,9 +153,9 @@ scout7/
 
 ## Output
 
-Diagrams are written to `output_dir` as `<slug>.excalidraw` — open with [Excalidraw](https://excalidraw.com) or any compatible viewer.
+Results are written to `output.dir` as `<slug><extension>` via the configured MCP tool.
 
-Results are stored in mem7 with metadata (URL, score, category, patterns) for deduplication and recall across cycles.
+Results are also stored in mem7 with metadata (URL, score, category, patterns) for deduplication and recall across cycles.
 
 ## License
 

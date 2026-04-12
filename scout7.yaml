@@ -1,7 +1,15 @@
 mesh_url: "http://localhost:9090"
 agent_id: "scout7"
-interval: 6h
-output_dir: "./diagrams"
+interval: 24h
+
+output:
+  tool: "arch7.create_diagram"
+  format: "diagram"
+  dir: "./diagrams"
+  extension: ".excalidraw"
+  params:
+    direction: "LR"
+    theme: "professional"
 
 search:
   queries:

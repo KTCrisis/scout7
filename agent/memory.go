@@ -33,7 +33,7 @@ type MemoryEntry struct {
 	Score       int      `json:"score"`
 	Category    string   `json:"category"`
 	Patterns    []string `json:"patterns"`
-	DiagramPath string   `json:"diagram_path,omitempty"`
+	OutputPath string `json:"output_path,omitempty"`
 	Reason      string   `json:"reason"`
 }
 
