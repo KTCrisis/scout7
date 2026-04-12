@@ -77,6 +77,9 @@ func Search(mc *mesh.Client, query string, maxResults int) ([]SearchResult, erro
 		for _, c := range mcp.Content {
 			all = append(all, parseTextResults(c.Text)...)
 		}
+		if maxResults > 0 && len(all) > maxResults {
+			all = all[:maxResults]
+		}
 		return all, nil
 	}
 
