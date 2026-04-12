@@ -27,8 +27,8 @@ One cycle processes all configured queries, then sleeps. Use `--once` to run a s
   - **searxng** — web search
   - **fetch** — URL content reader
   - **ollama** — local LLM (gemma4 or similar)
-  - **mem7** — persistent memory
-  - An **output tool** (default: arch7 for Excalidraw diagrams)
+  - **[mem7](https://github.com/KTCrisis/mem7)** — persistent memory
+  - An **output tool** (default: [arch7](https://github.com/KTCrisis/arch7) for Excalidraw diagrams)
 - A `scout7` policy in agent-mesh granting access to these tools
 
 ## Install
@@ -90,10 +90,10 @@ The `output` section controls how scout7 materializes results:
 
 | Format | Tool | Description |
 |--------|------|-------------|
-| `diagram` | `arch7.create_diagram` | Excalidraw diagrams (nodes/connections) |
+| `diagram` | [`arch7`](https://github.com/KTCrisis/arch7)`.create_diagram` | Excalidraw diagrams (nodes/connections) |
 | `markdown` | `filesystem.write_file` | Structured markdown reports |
 | `json` | `filesystem.write_file` | Raw architecture JSON |
-| `memory` | `memory.memory_store` | Store directly in mem7 (no file) |
+| `memory` | [`mem7`](https://github.com/KTCrisis/mem7)`.memory_store` | Store directly in mem7 (no file) |
 
 ### Config reference
 
