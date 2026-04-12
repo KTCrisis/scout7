@@ -26,7 +26,7 @@ One cycle processes all configured queries, then sleeps. Use `--once` to run a s
 - [agent-mesh](https://github.com/KTCrisis/agent-mesh) running on `:9090` with these MCP servers connected:
   - **searxng** — web search
   - **fetch** — URL content reader
-  - **ollama** — local LLM (gemma4 or similar)
+  - **[ollama-mcp-go](https://github.com/KTCrisis/ollama-mcp-go)** — MCP bridge to local [Ollama](https://ollama.com) (must be installed and running)
   - **[mem7](https://github.com/KTCrisis/mem7)** — persistent memory
   - An **output tool** (default: [arch7](https://github.com/KTCrisis/arch7) for Excalidraw diagrams)
 - A `scout7` policy in agent-mesh granting access to these tools
