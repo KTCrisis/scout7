@@ -62,14 +62,10 @@ func StoreResult(mc *mesh.Client, entry MemoryEntry) error {
 	content, _ := json.Marshal(entry)
 
 	_, err := mc.CallTool("memory.memory_store", map[string]any{
-		"key":     fmt.Sprintf("scout7:%s", slugify(entry.Name)),
-		"content": string(content),
-		"metadata": map[string]any{
-			"source":   "scout7",
-			"url":      entry.URL,
-			"score":    entry.Score,
-			"category": entry.Category,
-		},
+		"key":   fmt.Sprintf("scout7:%s", slugify(entry.Name)),
+		"value": string(content),
+		"agent": "scout7",
+		"tags":  []string{"scout7", entry.Category},
 	})
 	if err != nil {
 		return fmt.Errorf("store memory: %w", err)
@@ -80,29 +76,32 @@ func StoreResult(mc *mesh.Client, entry MemoryEntry) error {
 
 // ListSeenNames returns the names of architectures already stored.
 func ListSeenNames(mc *mesh.Client) []string {
-	tr, err := mc.CallTool("memory.memory_search", map[string]any{
-		"query": "scout7",
+	tr, err := mc.CallTool("memory.memory_list", map[string]any{
+		"tags": []string{"scout7"},
 	})
 	if err != nil {
 		slog.Warn("memory list failed", "err", err)
 		return nil
 	}
 
-	// Try to parse results and extract names.
-	var results []struct {
-		Content string `json:"content"`
-	}
-	if err := json.Unmarshal(tr.Result, &results); err != nil {
+	// Extract key names from MCP text response.
+	// Format: "N memories:\n- key [tags] — date\n..."
+	text := extractMCPText(tr.Result)
+	if text == "" || strings.HasPrefix(text, "0 memories") {
 		return nil
 	}
 
 	var names []string
-	for _, r := range results {
-		var entry MemoryEntry
-		if err := json.Unmarshal([]byte(r.Content), &entry); err == nil && entry.Name != "" {
-			names = append(names, entry.Name)
+	for _, line := range strings.Split(text, "\n") {
+		line = strings.TrimSpace(line)
+		if strings.HasPrefix(line, "- scout7:") {
+			// Extract the slug after "scout7:"
+			name := strings.TrimPrefix(line, "- ")
+			if idx := strings.Index(name, " ["); idx > 0 {
+				name = name[:idx]
+			}
+			names = append(names, name)
 		}
 	}
-
 	return names
 }
