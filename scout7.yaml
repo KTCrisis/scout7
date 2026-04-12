@@ -1,0 +1,17 @@
+mesh_url: "http://localhost:9090"
+agent_id: "scout7"
+interval: 6h
+output_dir: "./diagrams"
+
+search:
+  queries:
+    - "agentic AI architecture 2026"
+    - "AI agent framework design pattern"
+    - "multi-agent system architecture"
+  max_results: 3
+
+evaluate:
+  min_novelty_score: 7
+
+ollama:
+  model: "gemma4:e4b"
