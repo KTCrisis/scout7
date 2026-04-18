@@ -2,8 +2,10 @@ package main
 
 import (
 	"flag"
+	"fmt"
 	"log/slog"
 	"os"
+	"time"
 
 	scout7 "github.com/KTCrisis/scout7"
 	"github.com/KTCrisis/scout7/agent"
@@ -33,7 +35,8 @@ func main() {
 		"interval", cfg.Interval,
 	)
 
-	mc := mesh.NewClient(cfg.MeshURL, cfg.AgentID, "")
+	sessionID := fmt.Sprintf("scout7-%d", time.Now().Unix())
+	mc := mesh.NewClient(cfg.MeshURL, cfg.AgentID, sessionID)
 
 	if *once {
 		stats, err := agent.Run(mc, cfg)
