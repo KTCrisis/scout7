@@ -93,8 +93,8 @@ func Run(mc *mesh.Client, cfg *scout7.Config) (*Stats, error) {
 				Reason:   eval.Reason,
 			}
 
-			// Produce output if worthy.
-			if eval.DiagramIt {
+			// Produce output if worthy (both LLM and config threshold must agree).
+			if eval.DiagramIt && eval.Score >= cfg.Evaluate.MinNoveltyScore {
 				path, err := ProduceOutput(mc, arch, cfg.Output)
 				if err != nil {
 					slog.Warn("output generation failed", "name", arch.Name, "format", cfg.Output.Format, "err", err)

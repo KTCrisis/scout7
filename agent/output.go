@@ -4,11 +4,22 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"path/filepath"
 	"strings"
 
 	scout7 "github.com/KTCrisis/scout7"
 	"github.com/KTCrisis/scout7/mesh"
 )
+
+// safePath builds an output path and verifies it stays inside the target directory.
+func safePath(dir, name, ext string) (string, error) {
+	p := filepath.Join(dir, slugify(name)+ext)
+	rel, err := filepath.Rel(dir, p)
+	if err != nil || strings.HasPrefix(rel, "..") {
+		return "", fmt.Errorf("path traversal blocked: %q resolves outside %q", p, dir)
+	}
+	return p, nil
+}
 
 // ProduceOutput materializes an extracted architecture via the configured output tool.
 func ProduceOutput(mc *mesh.Client, arch *Architecture, cfg scout7.OutputConfig) (string, error) {
@@ -48,17 +59,19 @@ func outputDiagram(mc *mesh.Client, arch *Architecture, cfg scout7.OutputConfig)
 		}
 	}
 
-	outputPath := fmt.Sprintf("%s/%s%s", cfg.Dir, slugify(arch.Name), cfg.Extension)
-
-	params := map[string]any{
-		"nodes":       nodes,
-		"connections": connections,
-		"output_path": outputPath,
+	outputPath, err := safePath(cfg.Dir, arch.Name, cfg.Extension)
+	if err != nil {
+		return "", err
 	}
-	// Merge static params from config (direction, theme, etc.).
+
+	// Start from static config params, then overlay agent-computed values.
+	params := make(map[string]any, len(cfg.Params)+3)
 	for k, v := range cfg.Params {
 		params[k] = v
 	}
+	params["nodes"] = nodes
+	params["connections"] = connections
+	params["output_path"] = outputPath
 
 	tr, err := mc.CallTool(cfg.Tool, params)
 	if err != nil {
@@ -102,17 +115,19 @@ func outputMarkdown(mc *mesh.Client, arch *Architecture, cfg scout7.OutputConfig
 		sb.WriteString(fmt.Sprintf("| %s | %s | %s |\n", c.From, c.To, c.Label))
 	}
 
-	outputPath := fmt.Sprintf("%s/%s%s", cfg.Dir, slugify(arch.Name), cfg.Extension)
-
-	params := map[string]any{
-		"path":    outputPath,
-		"content": sb.String(),
+	outputPath, err := safePath(cfg.Dir, arch.Name, cfg.Extension)
+	if err != nil {
+		return "", err
 	}
+
+	params := make(map[string]any, len(cfg.Params)+2)
 	for k, v := range cfg.Params {
 		params[k] = v
 	}
+	params["path"] = outputPath
+	params["content"] = sb.String()
 
-	_, err := mc.CallTool(cfg.Tool, params)
+	_, err = mc.CallTool(cfg.Tool, params)
 	if err != nil {
 		return "", fmt.Errorf("write markdown: %w", err)
 	}
@@ -130,15 +145,17 @@ func outputJSON(mc *mesh.Client, arch *Architecture, cfg scout7.OutputConfig) (s
 		return "", fmt.Errorf("marshal architecture: %w", err)
 	}
 
-	outputPath := fmt.Sprintf("%s/%s%s", cfg.Dir, slugify(arch.Name), cfg.Extension)
-
-	params := map[string]any{
-		"path":    outputPath,
-		"content": string(data),
+	outputPath, err := safePath(cfg.Dir, arch.Name, cfg.Extension)
+	if err != nil {
+		return "", err
 	}
+
+	params := make(map[string]any, len(cfg.Params)+2)
 	for k, v := range cfg.Params {
 		params[k] = v
 	}
+	params["path"] = outputPath
+	params["content"] = string(data)
 
 	_, err = mc.CallTool(cfg.Tool, params)
 	if err != nil {
@@ -158,15 +175,14 @@ func outputMemory(mc *mesh.Client, arch *Architecture, cfg scout7.OutputConfig) 
 		return "", fmt.Errorf("marshal architecture: %w", err)
 	}
 
-	params := map[string]any{
-		"key":   fmt.Sprintf("scout7:arch:%s", slugify(arch.Name)),
-		"value": string(data),
-		"agent": "scout7",
-		"tags":  []string{"scout7", "architecture"},
-	}
+	params := make(map[string]any, len(cfg.Params)+4)
 	for k, v := range cfg.Params {
 		params[k] = v
 	}
+	params["key"] = fmt.Sprintf("scout7:arch:%s", slugify(arch.Name))
+	params["value"] = string(data)
+	params["agent"] = "scout7"
+	params["tags"] = []string{"scout7", "architecture"}
 
 	_, err = mc.CallTool(cfg.Tool, params)
 	if err != nil {
