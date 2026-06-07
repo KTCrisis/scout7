@@ -4,7 +4,7 @@ Autonomous web research agent. Searches the web, extracts structured information
 
 Default use case: scout agentic AI architectures and generate Excalidraw diagrams.
 
-Built on [agent-mesh](https://github.com/KTCrisis/agent-mesh) — all tool access goes through policy, tracing, and approval.
+Built on [flux7-mesh](https://github.com/KTCrisis/flux7-mesh) — all tool access goes through policy, tracing, and approval.
 
 ## How it works
 
@@ -23,13 +23,13 @@ One cycle processes all configured queries, then sleeps. Use `--once` to run a s
 
 ## Prerequisites
 
-- [agent-mesh](https://github.com/KTCrisis/agent-mesh) running on `:9090` with these MCP servers connected:
+- [flux7-mesh](https://github.com/KTCrisis/flux7-mesh) running on `:9090` with these MCP servers connected:
   - **searxng** — web search
   - **fetch** — URL content reader
   - **[ollama-mcp-go](https://github.com/KTCrisis/ollama-mcp-go)** — MCP bridge to local [Ollama](https://ollama.com) (must be installed and running)
-  - **[mem7](https://github.com/KTCrisis/mem7)** — persistent memory
+  - **[mem7](https://github.com/KTCrisis/flux7-memory)** — persistent memory
   - An **output tool** (default: [arch7](https://github.com/KTCrisis/arch7) for Excalidraw diagrams)
-- A `scout7` policy in agent-mesh granting access to these tools
+- A `scout7` policy in flux7-mesh granting access to these tools
 
 ## Install
 
@@ -93,13 +93,13 @@ The `output` section controls how scout7 materializes results:
 | `diagram` | [`arch7`](https://github.com/KTCrisis/arch7)`.create_diagram` | Excalidraw diagrams (nodes/connections) |
 | `markdown` | `filesystem.write_file` | Structured markdown reports |
 | `json` | `filesystem.write_file` | Raw architecture JSON |
-| `memory` | [`mem7`](https://github.com/KTCrisis/mem7)`.memory_store` | Store directly in mem7 (no file) |
+| `memory` | [`mem7`](https://github.com/KTCrisis/flux7-memory)`.memory_store` | Store directly in mem7 (no file) |
 
 ### Config reference
 
 | Field | Description |
 |-------|-------------|
-| `mesh_url` | agent-mesh HTTP endpoint |
+| `mesh_url` | flux7-mesh HTTP endpoint |
 | `agent_id` | Identity for policy evaluation (`Authorization: Bearer agent:scout7`) |
 | `interval` | Sleep between cycles in loop mode |
 | `output.tool` | MCP tool to call for output |
@@ -112,7 +112,7 @@ The `output` section controls how scout7 materializes results:
 | `evaluate.min_novelty_score` | Minimum score (0-10) to trigger output |
 | `ollama.model` | Ollama model for extraction and evaluation |
 
-## agent-mesh policy
+## flux7-mesh policy
 
 ```yaml
 # policies/scout7.yaml
@@ -147,7 +147,7 @@ scout7/
     output.go            pluggable output (diagram, markdown, json, memory)
     memory.go            mem7 read/write (seen URLs, store results)
   mesh/
-    client.go            agent-mesh HTTP client
+    client.go            flux7-mesh HTTP client
   config.go              YAML config loading
 ```
 
