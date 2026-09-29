@@ -1,0 +1,39 @@
+# scout7 governed by the enterprise stack: Kong (Konnect node) in front,
+# Keycloak for identity, its own mesh7 behind (flux7-stack, profile
+# scout7-konnect). The personal setup stays in scout7.yaml: the mesh alone,
+# declared name, REST.
+#
+#   SCOUT7_CLIENT_SECRET=<the client secret> ./scout7 --config scout7.enterprise.yaml --probe
+
+mesh_url: "http://localhost:8010/scout/mcp"
+agent_id: "scout7"
+transport: mcp
+auth:
+  mode: oidc
+  token_url: "http://localhost:8180/realms/mesh7-demo/protocol/openid-connect/token"
+  client_id: "scout7"
+  client_secret_env: SCOUT7_CLIENT_SECRET
+  # no scopes requested: Keycloak gives the client's default scopes
+  # (web:read memory:read memory:write diagram:write), and taking one away
+  # in Keycloak removes it from the next token
+interval: 24h
+
+output:
+  tool: "arch7.create_diagram"
+  format: "diagram"
+  dir: "/data/diagrams"     # inside the mesh7-scout container: flux7-stack/tools/mesh7-scout/diagrams
+  extension: ".excalidraw"
+  params:
+    direction: "LR"
+    theme: "professional"
+
+search:
+  queries:
+    - "MCP gateway governance architecture"
+  max_results: 2
+
+evaluate:
+  min_novelty_score: 5     # lower than personal use, so a demo cycle draws a diagram
+
+ollama:
+  model: "gemma4:e4b"
