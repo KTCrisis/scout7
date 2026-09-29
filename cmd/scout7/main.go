@@ -17,6 +17,7 @@ func main() {
 	configPath := flag.String("config", "scout7.yaml", "path to config file")
 	once := flag.Bool("once", false, "run once then exit (no loop)")
 	probe := flag.Bool("probe", false, "check the mesh connection with one read and one search, then exit")
+	query := flag.String("query", "", "search this instead of the configured queries (a human's request)")
 	flag.Parse()
 
 	slog.SetDefault(slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{
@@ -27,6 +28,10 @@ func main() {
 	if err != nil {
 		slog.Error("failed to load config", "path", *configPath, "err", err)
 		os.Exit(1)
+	}
+
+	if *query != "" {
+		cfg.Search.Queries = []string{*query}
 	}
 
 	slog.Info("scout7 starting",

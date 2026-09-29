@@ -26,6 +26,14 @@ type AgentName string
 // Token returns "agent:<name>".
 func (a AgentName) Token() (string, error) { return "agent:" + string(a), nil }
 
+// StaticToken is a bearer handed over by whoever launched the agent: a chat
+// that exchanged the human's token for one naming the agent and the human
+// (RFC 8693). The agent does not refresh it; a run is shorter than its life.
+type StaticToken string
+
+// Token returns the token.
+func (s StaticToken) Token() (string, error) { return string(s), nil }
+
 // ClientCredentials fetches an OAuth access token with the client credentials
 // grant (an agent acting for itself, no human behind it) and keeps it until
 // shortly before it expires.

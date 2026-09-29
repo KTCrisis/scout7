@@ -31,12 +31,16 @@ type Config struct {
 //	mode: oidc   gets an OAuth token with the client credentials grant from
 //	             token_url; the secret is read from the variable named by
 //	             client_secret_env, never from this file
+//	mode: token  uses the token found in the variable named by token_env, as
+//	             handed over by a launcher acting for a human (a chat that
+//	             exchanged the human's token for scout7)
 type AuthConfig struct {
 	Mode            string   `yaml:"mode"`
 	TokenURL        string   `yaml:"token_url"`
 	ClientID        string   `yaml:"client_id"`
 	ClientSecretEnv string   `yaml:"client_secret_env"`
 	Scopes          []string `yaml:"scopes"`
+	TokenEnv        string   `yaml:"token_env"`
 }
 
 // OutputConfig controls how scout7 materializes results.
@@ -115,8 +119,12 @@ func LoadConfig(path string) (*Config, error) {
 		if cfg.Auth.TokenURL == "" || cfg.Auth.ClientID == "" || cfg.Auth.ClientSecretEnv == "" {
 			return nil, fmt.Errorf("auth: oidc needs token_url, client_id and client_secret_env")
 		}
+	case "token":
+		if cfg.Auth.TokenEnv == "" {
+			return nil, fmt.Errorf("auth: token needs token_env")
+		}
 	default:
-		return nil, fmt.Errorf("auth: unknown mode %q (agent or oidc)", cfg.Auth.Mode)
+		return nil, fmt.Errorf("auth: unknown mode %q (agent, oidc or token)", cfg.Auth.Mode)
 	}
 
 	if len(cfg.Search.Queries) == 0 {
@@ -136,6 +144,13 @@ func LoadConfig(path string) (*Config, error) {
 // per cycle keeps the REST session id per cycle, as before.
 func (c *Config) NewMeshClient(sessionID string) (*mesh.Client, error) {
 	o := mesh.Options{URL: c.MeshURL, Transport: c.Transport, AgentID: c.AgentID, SessionID: sessionID}
+	if c.Auth.Mode == "token" {
+		t := os.Getenv(c.Auth.TokenEnv)
+		if t == "" {
+			return nil, fmt.Errorf("auth: environment variable %s is empty", c.Auth.TokenEnv)
+		}
+		o.Tokens = mesh.StaticToken(t)
+	}
 	if c.Auth.Mode == "oidc" {
 		cc, err := mesh.NewClientCredentials(c.Auth.TokenURL, c.Auth.ClientID, c.Auth.ClientSecretEnv, c.Auth.Scopes)
 		if err != nil {
