@@ -170,6 +170,21 @@ func toolResult(res json.RawMessage) (*ToolResult, error) {
 		return nil, fmt.Errorf("%s", firstLine(s))
 	}
 	if json.Valid([]byte(s)) {
+		// The upstream's own isError travels inside the serialized result:
+		// a failed fetch must not reach the agent as page content.
+		var inner struct {
+			IsError bool `json:"isError"`
+			Content []struct {
+				Text string `json:"text"`
+			} `json:"content"`
+		}
+		if json.Unmarshal([]byte(s), &inner) == nil && inner.IsError {
+			msg := ""
+			for _, c := range inner.Content {
+				msg += c.Text
+			}
+			return nil, fmt.Errorf("tool error: %s", firstLine(msg))
+		}
 		return &ToolResult{Result: json.RawMessage(s), Policy: "allow"}, nil
 	}
 	// Plain text: hand it over in the MCP content shape the agent already reads.

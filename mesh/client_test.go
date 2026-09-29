@@ -198,3 +198,14 @@ func TestClientCredentialsNeedsTheSecret(t *testing.T) {
 		t.Fatalf("expected an error naming the variable, got %v", err)
 	}
 }
+
+// The upstream's isError, serialized inside mesh7's text, is an error.
+func TestMCPUpstreamErrorIsAnError(t *testing.T) {
+	f := &fakeMesh{answer: `{"content":[{"type":"text","text":"Command node ExtractArticle.js returned non-zero exit status 1."}],"isError":true}`}
+	c, stop := mcpClient(t, f, nil)
+	defer stop()
+	_, err := c.CallTool("fetch.fetch", map[string]any{"url": "https://example.org"})
+	if err == nil || !strings.Contains(err.Error(), "ExtractArticle") {
+		t.Fatalf("expected the upstream error, got %v", err)
+	}
+}
