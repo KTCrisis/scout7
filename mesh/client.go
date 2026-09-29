@@ -6,11 +6,18 @@ package mesh
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
+	"regexp"
 	"time"
 )
+
+// ErrPendingApproval is the error of a call the mesh holds until a human
+// decides. errors.Is recognises it whatever the message around it.
+var ErrPendingApproval = errors.New("pending human approval")
 
 // transport is how a tool call reaches the mesh: REST (POST /tool/<name>) or
 // MCP (JSON-RPC on one endpoint). Both return the same ToolResult.
@@ -22,6 +29,10 @@ type transport interface {
 // transport and the credential are chosen once, at construction.
 type Client struct {
 	t transport
+	// approvalWait: how long a call held for a human is retried before
+	// giving up; zero gives up at once, as before.
+	approvalWait time.Duration
+	approvalPoll time.Duration
 }
 
 // Options chooses the transport and the credential.
@@ -31,6 +42,9 @@ type Options struct {
 	Tokens    TokenSource // default: AgentName(AgentID)
 	AgentID   string
 	SessionID string // REST only: sent as X-Session-Id
+	// ApprovalWait: a call held for a human is retried (the mesh answers the
+	// same approval each time) until approved, refused, or this long.
+	ApprovalWait time.Duration
 }
 
 // New builds a client from options.
@@ -42,9 +56,11 @@ func New(o Options) (*Client, error) {
 	httpClient := &http.Client{Timeout: 120 * time.Second}
 	switch o.Transport {
 	case "", "rest":
-		return &Client{t: &restTransport{baseURL: o.URL, sessionID: o.SessionID, tokens: tokens, http: httpClient}}, nil
+		return &Client{t: &restTransport{baseURL: o.URL, sessionID: o.SessionID, tokens: tokens, http: httpClient},
+			approvalWait: o.ApprovalWait, approvalPoll: 3 * time.Second}, nil
 	case "mcp":
-		return &Client{t: &mcpTransport{endpoint: o.URL, tokens: tokens, http: httpClient}}, nil
+		return &Client{t: &mcpTransport{endpoint: o.URL, tokens: tokens, http: httpClient},
+			approvalWait: o.ApprovalWait, approvalPoll: 3 * time.Second}, nil
 	default:
 		return nil, fmt.Errorf("unknown mesh transport %q (rest or mcp)", o.Transport)
 	}
@@ -66,9 +82,32 @@ type ToolResult struct {
 	Error     string          `json:"error"`
 }
 
-// CallTool invokes a tool through flux7-mesh.
+var approvalID = regexp.MustCompile(`id: ([0-9a-f]+)`)
+
+// CallTool invokes a tool through flux7-mesh. A call held for a human is
+// retried while approvalWait allows: once approved, the retry runs.
 func (c *Client) CallTool(tool string, params map[string]any) (*ToolResult, error) {
-	return c.t.callTool(tool, params)
+	tr, err := c.t.callTool(tool, params)
+	if c.approvalWait <= 0 || !errors.Is(err, ErrPendingApproval) {
+		return tr, err
+	}
+	id := ""
+	if m := approvalID.FindStringSubmatch(err.Error()); m != nil {
+		id = m[1]
+	}
+	slog.Info("waiting for approval", "tool", tool, "approval", id, "max", c.approvalWait)
+	deadline := time.Now().Add(c.approvalWait)
+	for time.Now().Before(deadline) {
+		time.Sleep(c.approvalPoll)
+		tr, err = c.t.callTool(tool, params)
+		if !errors.Is(err, ErrPendingApproval) {
+			if err == nil {
+				slog.Info("approved", "tool", tool, "approval", id)
+			}
+			return tr, err
+		}
+	}
+	return nil, fmt.Errorf("no decision within %s: %w", c.approvalWait, err)
 }
 
 // restTransport is the mesh's REST data plane: POST {baseURL}/tool/{tool}

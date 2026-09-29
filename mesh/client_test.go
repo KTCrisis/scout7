@@ -2,12 +2,14 @@ package mesh
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"sync/atomic"
 	"testing"
+	"time"
 )
 
 // The REST transport with a declared name is what scout7 always sent.
@@ -116,7 +118,7 @@ func TestMCPApprovalIsAnError(t *testing.T) {
 	defer stop()
 
 	_, err := c.CallTool("memory.memory_store", nil)
-	if err == nil || !strings.Contains(err.Error(), "pending human approval") {
+	if !errors.Is(err, ErrPendingApproval) {
 		t.Fatalf("expected a pending approval error, got %v", err)
 	}
 }
@@ -207,5 +209,48 @@ func TestMCPUpstreamErrorIsAnError(t *testing.T) {
 	_, err := c.CallTool("fetch.fetch", map[string]any{"url": "https://example.org"})
 	if err == nil || !strings.Contains(err.Error(), "ExtractArticle") {
 		t.Fatalf("expected the upstream error, got %v", err)
+	}
+}
+
+// With approval_wait, a held call is retried until the human approves, then
+// its result comes back; without it, the call fails at once.
+func TestApprovalWaitRetriesUntilApproved(t *testing.T) {
+	var approved atomic.Bool
+	var calls atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var req struct {
+			ID     int    `json:"id"`
+			Method string `json:"method"`
+		}
+		json.NewDecoder(r.Body).Decode(&req)
+		if req.Method == "initialize" {
+			w.Header().Set("Mcp-Session-Id", "s")
+			fmt.Fprintf(w, `{"jsonrpc":"2.0","id":%d,"result":{}}`, req.ID)
+			return
+		}
+		if calls.Add(1) == 3 {
+			approved.Store(true) // the human decides while the agent waits
+		}
+		text := `Approval required (id: 4935d1b1) for arch7.create_diagram, valid 299s.`
+		if approved.Load() {
+			text = `{"content":[{"type":"text","text":"Created diagram"}]}`
+		}
+		b, _ := json.Marshal(text)
+		fmt.Fprintf(w, `{"jsonrpc":"2.0","id":%d,"result":{"content":[{"type":"text","text":%s}]}}`, req.ID, b)
+	}))
+	defer srv.Close()
+
+	c, _ := New(Options{URL: srv.URL, Transport: "mcp", AgentID: "scout7", ApprovalWait: 5 * time.Second})
+	c.approvalPoll = 10 * time.Millisecond
+	tr, err := c.CallTool("arch7.create_diagram", map[string]any{"title": "x"})
+	if err != nil || !strings.Contains(string(tr.Result), "Created diagram") {
+		t.Fatalf("expected the approved result, got %v, %v", tr, err)
+	}
+
+	approved.Store(false)
+	calls.Store(-100)
+	quick, _ := New(Options{URL: srv.URL, Transport: "mcp", AgentID: "scout7"})
+	if _, err := quick.CallTool("arch7.create_diagram", nil); !errors.Is(err, ErrPendingApproval) {
+		t.Fatalf("without approval_wait the call fails at once, got %v", err)
 	}
 }

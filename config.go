@@ -16,6 +16,9 @@ type Config struct {
 	AgentID   string        `yaml:"agent_id"`
 	Transport string        `yaml:"transport"` // rest (default) | mcp
 	Auth      AuthConfig    `yaml:"auth"`
+	// ApprovalWait: how long to wait for a human when the mesh holds a call
+	// for approval (e.g. 5m); zero does not wait, the call fails at once.
+	ApprovalWait time.Duration `yaml:"approval_wait"`
 	Interval  time.Duration `yaml:"interval"`
 	Output    OutputConfig  `yaml:"output"`
 	Search    SearchConfig  `yaml:"search"`
@@ -143,7 +146,8 @@ func LoadConfig(path string) (*Config, error) {
 // NewMeshClient builds the mesh client this config describes. A new client
 // per cycle keeps the REST session id per cycle, as before.
 func (c *Config) NewMeshClient(sessionID string) (*mesh.Client, error) {
-	o := mesh.Options{URL: c.MeshURL, Transport: c.Transport, AgentID: c.AgentID, SessionID: sessionID}
+	o := mesh.Options{URL: c.MeshURL, Transport: c.Transport, AgentID: c.AgentID, SessionID: sessionID,
+		ApprovalWait: c.ApprovalWait}
 	if c.Auth.Mode == "token" {
 		t := os.Getenv(c.Auth.TokenEnv)
 		if t == "" {
