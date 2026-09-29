@@ -164,7 +164,7 @@ func toolResult(res json.RawMessage) (*ToolResult, error) {
 	// mesh7 answers a call that waits for a human with text, not an error:
 	// the agent must not read it as the tool's output.
 	if strings.HasPrefix(s, "Approval required") {
-		return nil, fmt.Errorf("pending human approval: %s", firstLine(s))
+		return nil, fmt.Errorf("%w: %s", ErrPendingApproval, firstLine(s))
 	}
 	if strings.HasPrefix(s, "Policy denied") || strings.HasPrefix(s, "Backend error") {
 		return nil, fmt.Errorf("%s", firstLine(s))
