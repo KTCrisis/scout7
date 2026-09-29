@@ -123,7 +123,10 @@ func Run(mc *mesh.Client, cfg *scout7.Config) (*Stats, error) {
 func Loop(mc *mesh.Client, cfg *scout7.Config) error {
 	for {
 		sessionID := fmt.Sprintf("scout7-%d", time.Now().Unix())
-		mc = mesh.NewClient(cfg.MeshURL, cfg.AgentID, sessionID)
+		var err error
+		if mc, err = cfg.NewMeshClient(sessionID); err != nil {
+			return fmt.Errorf("mesh client: %w", err)
+		}
 
 		slog.Info("starting cycle", "session", sessionID)
 		start := time.Now()

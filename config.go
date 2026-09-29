@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/KTCrisis/scout7/mesh"
 	"gopkg.in/yaml.v3"
 )
 
@@ -13,11 +14,29 @@ import (
 type Config struct {
 	MeshURL   string        `yaml:"mesh_url"`
 	AgentID   string        `yaml:"agent_id"`
+	Transport string        `yaml:"transport"` // rest (default) | mcp
+	Auth      AuthConfig    `yaml:"auth"`
 	Interval  time.Duration `yaml:"interval"`
-	Output OutputConfig `yaml:"output"`
+	Output    OutputConfig  `yaml:"output"`
 	Search    SearchConfig  `yaml:"search"`
 	Evaluate  EvalConfig    `yaml:"evaluate"`
 	Ollama    OllamaConfig  `yaml:"ollama"`
+}
+
+// AuthConfig chooses how scout7 proves who it is to the mesh, or to a gateway
+// in front of it.
+//
+//	mode: agent  sends "Bearer agent:<agent_id>"; a mesh on the same machine
+//	             trusts the declared name (the default)
+//	mode: oidc   gets an OAuth token with the client credentials grant from
+//	             token_url; the secret is read from the variable named by
+//	             client_secret_env, never from this file
+type AuthConfig struct {
+	Mode            string   `yaml:"mode"`
+	TokenURL        string   `yaml:"token_url"`
+	ClientID        string   `yaml:"client_id"`
+	ClientSecretEnv string   `yaml:"client_secret_env"`
+	Scopes          []string `yaml:"scopes"`
 }
 
 // OutputConfig controls how scout7 materializes results.
@@ -90,6 +109,16 @@ func LoadConfig(path string) (*Config, error) {
 		cfg.Output.Dir = abs
 	}
 
+	switch cfg.Auth.Mode {
+	case "", "agent":
+	case "oidc":
+		if cfg.Auth.TokenURL == "" || cfg.Auth.ClientID == "" || cfg.Auth.ClientSecretEnv == "" {
+			return nil, fmt.Errorf("auth: oidc needs token_url, client_id and client_secret_env")
+		}
+	default:
+		return nil, fmt.Errorf("auth: unknown mode %q (agent or oidc)", cfg.Auth.Mode)
+	}
+
 	if len(cfg.Search.Queries) == 0 {
 		cfg.Search.Queries = []string{
 			"agentic AI architecture 2026",
@@ -101,4 +130,18 @@ func LoadConfig(path string) (*Config, error) {
 	}
 
 	return cfg, nil
+}
+
+// NewMeshClient builds the mesh client this config describes. A new client
+// per cycle keeps the REST session id per cycle, as before.
+func (c *Config) NewMeshClient(sessionID string) (*mesh.Client, error) {
+	o := mesh.Options{URL: c.MeshURL, Transport: c.Transport, AgentID: c.AgentID, SessionID: sessionID}
+	if c.Auth.Mode == "oidc" {
+		cc, err := mesh.NewClientCredentials(c.Auth.TokenURL, c.Auth.ClientID, c.Auth.ClientSecretEnv, c.Auth.Scopes)
+		if err != nil {
+			return nil, err
+		}
+		o.Tokens = cc
+	}
+	return mesh.New(o)
 }

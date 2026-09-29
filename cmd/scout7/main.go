@@ -1,6 +1,7 @@
 package main
 
 import (
+	"cmp"
 	"flag"
 	"fmt"
 	"log/slog"
@@ -9,7 +10,6 @@ import (
 
 	scout7 "github.com/KTCrisis/scout7"
 	"github.com/KTCrisis/scout7/agent"
-	"github.com/KTCrisis/scout7/mesh"
 )
 
 func main() {
@@ -29,6 +29,8 @@ func main() {
 
 	slog.Info("scout7 starting",
 		"mesh", cfg.MeshURL,
+		"transport", cmp.Or(cfg.Transport, "rest"),
+		"auth", cmp.Or(cfg.Auth.Mode, "agent"),
 		"agent", cfg.AgentID,
 		"model", cfg.Ollama.Model,
 		"queries", len(cfg.Search.Queries),
@@ -36,7 +38,11 @@ func main() {
 	)
 
 	sessionID := fmt.Sprintf("scout7-%d", time.Now().Unix())
-	mc := mesh.NewClient(cfg.MeshURL, cfg.AgentID, sessionID)
+	mc, err := cfg.NewMeshClient(sessionID)
+	if err != nil {
+		slog.Error("failed to build the mesh client", "err", err)
+		os.Exit(1)
+	}
 
 	if *once {
 		stats, err := agent.Run(mc, cfg)
