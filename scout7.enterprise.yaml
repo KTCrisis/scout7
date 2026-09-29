@@ -13,7 +13,9 @@ auth:
   token_url: "http://localhost:8180/realms/mesh7-demo/protocol/openid-connect/token"
   client_id: "scout7"
   client_secret_env: SCOUT7_CLIENT_SECRET
-  scopes: [web:read, memory:read, memory:write, diagram:write]
+  # no scopes requested: Keycloak gives the client's default scopes
+  # (web:read memory:read memory:write diagram:write), and taking one away
+  # in Keycloak removes it from the next token
 interval: 24h
 
 output:
