@@ -23,6 +23,8 @@ type Stats struct {
 func Run(mc *mesh.Client, cfg *scout7.Config) (*Stats, error) {
 	stats := &Stats{}
 
+	judge := NewJudge(cfg.Judge)
+
 	// Recall what we've already seen.
 	seenNames := ListSeenNames(mc)
 	slog.Info("recalled seen architectures", "count", len(seenNames))
@@ -60,6 +62,28 @@ func Run(mc *mesh.Client, cfg *scout7.Config) (*Stats, error) {
 				continue
 			}
 
+			// Ask the judge first: a page it drops costs no extraction. If the
+			// judge fails (network, missing key), the LLM decides as before.
+			var verdict *Verdict
+			if judge != nil {
+				v, err := judge.Judge(content, sr.Title, seenNames)
+				if err != nil {
+					slog.Warn("judge failed, the LLM decides", "url", sr.URL, "err", err)
+				} else if !v.Keep(cfg.Judge) {
+					slog.Info("judge drops the page", "url", sr.URL, "describes", v.Describes, "listing", v.Listing)
+					_ = StoreResult(mc, MemoryEntry{
+						URL:    sr.URL,
+						Name:   sr.Title,
+						Score:  0,
+						Reason: fmt.Sprintf("judge %s: not an architecture (describes %.2f, listing %.2f)", v.Model, v.Describes, v.Listing),
+					})
+					stats.Skipped++
+					continue
+				} else {
+					verdict = v
+				}
+			}
+
 			// Extract architecture.
 			arch, err := Extract(mc, cfg.Ollama.Model, content, sr.URL)
 			if err != nil {
@@ -76,9 +100,11 @@ func Run(mc *mesh.Client, cfg *scout7.Config) (*Stats, error) {
 			}
 			stats.Extracted++
 
-			// Evaluate novelty.
-			eval, err := Evaluate(mc, cfg.Ollama.Model, arch, seenNames)
-			if err != nil {
+			// Evaluate novelty: the judge's answer when there is one, else the LLM.
+			var eval *Evaluation
+			if verdict != nil {
+				eval = verdict.Evaluation(cfg.Judge)
+			} else if eval, err = Evaluate(mc, cfg.Ollama.Model, arch, seenNames); err != nil {
 				slog.Warn("evaluation failed", "name", arch.Name, "err", err)
 				stats.Errors++
 				continue
@@ -93,8 +119,13 @@ func Run(mc *mesh.Client, cfg *scout7.Config) (*Stats, error) {
 				Reason:   eval.Reason,
 			}
 
-			// Produce output if worthy (both LLM and config threshold must agree).
-			if eval.DiagramIt && eval.Score >= cfg.Evaluate.MinNoveltyScore {
+			// Produce output if worthy: the LLM and min_novelty_score must agree;
+			// the judge's novelty_min already holds the measured threshold.
+			worthy := eval.DiagramIt && eval.Score >= cfg.Evaluate.MinNoveltyScore
+			if verdict != nil {
+				worthy = eval.DiagramIt
+			}
+			if worthy {
 				path, err := ProduceOutput(mc, arch, cfg.Output)
 				if err != nil {
 					slog.Warn("output generation failed", "name", arch.Name, "format", cfg.Output.Format, "err", err)

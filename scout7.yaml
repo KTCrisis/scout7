@@ -25,3 +25,17 @@ evaluate:
 
 ollama:
   model: "gemma4:e4b"
+
+# Jev decides whether a page is worth extracting and how new it is; gemma4
+# keeps the extraction. Jev is a model, not an agent: scout7 calls it
+# directly (not through the mesh), like sup7. Thresholds measured on
+# ~/work/jev/banc-scout7 (02/10/2026). Remove this block to give every
+# decision back to the LLM.
+judge:
+  provider: jev
+  backend: cloudflare
+  api_key_env: CLOUDFLARE_WORKERS_AI_TOKEN
+  account_id_env: CLOUDFLARE_ACCOUNT_ID
+  keep_min: 0.5
+  listing_max: 0.5
+  novelty_min: 1.0

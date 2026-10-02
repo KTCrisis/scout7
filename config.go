@@ -12,18 +12,19 @@ import (
 
 // Config holds the scout7 configuration.
 type Config struct {
-	MeshURL   string        `yaml:"mesh_url"`
-	AgentID   string        `yaml:"agent_id"`
-	Transport string        `yaml:"transport"` // rest (default) | mcp
-	Auth      AuthConfig    `yaml:"auth"`
+	MeshURL   string     `yaml:"mesh_url"`
+	AgentID   string     `yaml:"agent_id"`
+	Transport string     `yaml:"transport"` // rest (default) | mcp
+	Auth      AuthConfig `yaml:"auth"`
 	// ApprovalWait: how long to wait for a human when the mesh holds a call
 	// for approval (e.g. 5m); zero does not wait, the call fails at once.
 	ApprovalWait time.Duration `yaml:"approval_wait"`
-	Interval  time.Duration `yaml:"interval"`
-	Output    OutputConfig  `yaml:"output"`
-	Search    SearchConfig  `yaml:"search"`
-	Evaluate  EvalConfig    `yaml:"evaluate"`
-	Ollama    OllamaConfig  `yaml:"ollama"`
+	Interval     time.Duration `yaml:"interval"`
+	Output       OutputConfig  `yaml:"output"`
+	Search       SearchConfig  `yaml:"search"`
+	Evaluate     EvalConfig    `yaml:"evaluate"`
+	Ollama       OllamaConfig  `yaml:"ollama"`
+	Judge        JudgeConfig   `yaml:"judge"`
 }
 
 // AuthConfig chooses how scout7 proves who it is to the mesh, or to a gateway
@@ -66,6 +67,24 @@ type EvalConfig struct {
 	MinNoveltyScore int `yaml:"min_novelty_score"`
 }
 
+// JudgeConfig hands the cycle's decisions (keep a page, how new it is) to a
+// System One judge. Jev is a model, not an agent: scout7 calls it directly,
+// as sup7 does, and a gateway may front it later through url. Empty provider
+// leaves every decision to the LLM, as before.
+type JudgeConfig struct {
+	Provider     string        `yaml:"provider"`       // "" (the LLM decides) | jev
+	Backend      string        `yaml:"backend"`        // cloudflare (default) | typesafe | local
+	Model        string        `yaml:"model"`          // default per backend: typesafe/jev, jev-latest, nimble
+	URL          string        `yaml:"url"`            // overrides the backend's endpoint (a gateway, a local server)
+	APIKeyEnv    string        `yaml:"api_key_env"`    // variable holding the key, never the key itself
+	AccountIDEnv string        `yaml:"account_id_env"` // cloudflare only
+	KeepMin      float64       `yaml:"keep_min"`       // describes_architecture at or above: extract the page
+	ListingMax   float64       `yaml:"listing_max"`    // product_listing at or above: drop it
+	NoveltyMin   float64       `yaml:"novelty_min"`    // novelty level (0-3) at or above: draw a diagram
+	StateChars   int           `yaml:"state_chars"`    // characters of the page sent to the judge
+	Timeout      time.Duration `yaml:"timeout"`
+}
+
 // OllamaConfig controls which model to use.
 type OllamaConfig struct {
 	Model string `yaml:"model"`
@@ -101,6 +120,17 @@ func LoadConfig(path string) (*Config, error) {
 		Ollama: OllamaConfig{
 			Model: "gemma4:e4b",
 		},
+		// thresholds measured on ~/work/jev/banc-scout7 (02/10/2026, 30 pages)
+		Judge: JudgeConfig{
+			Backend:      "cloudflare",
+			APIKeyEnv:    "CLOUDFLARE_WORKERS_AI_TOKEN",
+			AccountIDEnv: "CLOUDFLARE_ACCOUNT_ID",
+			KeepMin:      0.5,
+			ListingMax:   0.5,
+			NoveltyMin:   1.0,
+			StateChars:   8000,
+			Timeout:      30 * time.Second,
+		},
 	}
 
 	if err := yaml.Unmarshal(data, cfg); err != nil {
@@ -128,6 +158,17 @@ func LoadConfig(path string) (*Config, error) {
 		}
 	default:
 		return nil, fmt.Errorf("auth: unknown mode %q (agent, oidc or token)", cfg.Auth.Mode)
+	}
+
+	switch cfg.Judge.Provider {
+	case "", "jev":
+	default:
+		return nil, fmt.Errorf("judge: unknown provider %q (jev, or empty for the LLM)", cfg.Judge.Provider)
+	}
+	switch cfg.Judge.Backend {
+	case "cloudflare", "typesafe", "local":
+	default:
+		return nil, fmt.Errorf("judge: unknown backend %q (cloudflare, typesafe or local)", cfg.Judge.Backend)
 	}
 
 	if len(cfg.Search.Queries) == 0 {
