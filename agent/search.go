@@ -103,8 +103,11 @@ func Search(mc *mesh.Client, query string, maxResults int) ([]SearchResult, erro
 func FetchContent(mc *mesh.Client, url string) (string, error) {
 	slog.Info("fetching", "url", url)
 
+	// mcp-server-fetch cuts at 5000 characters by default; ask for what
+	// Extract keeps, so the judge and the LLM read the same page.
 	tr, err := mc.CallTool("fetch.fetch", map[string]any{
-		"url": url,
+		"url":        url,
+		"max_length": 12000,
 	})
 	if err != nil {
 		return "", fmt.Errorf("fetch %s: %w", url, err)
