@@ -12,9 +12,10 @@ Built on [flux7-mesh](https://github.com/KTCrisis/flux7-mesh) — all tool acces
 Search (searxng)
   → Filter already-seen URLs (mem7)
   → Fetch article content (fetch)
+  → Judge: keep the page? how new? (Jev, optional, outside the mesh)
   → Extract architecture (ollama/gemma4)
-  → Evaluate novelty 0-10 (ollama/gemma4)
-  → Produce output if score >= threshold (configurable tool)
+  → Evaluate novelty: the judge's answer, or 0-10 by ollama/gemma4
+  → Produce output if novel enough (configurable tool)
   → Store result in memory (mem7)
   → Sleep → repeat
 ```
@@ -110,7 +111,15 @@ The `output` section controls how scout7 materializes results:
 | `search.queries` | Search terms sent to searxng |
 | `search.max_results` | Results per query |
 | `evaluate.min_novelty_score` | Minimum score (0-10) to trigger output |
-| `ollama.model` | Ollama model for extraction and evaluation |
+| `ollama.model` | Ollama model for extraction (and evaluation without a judge) |
+| `judge.provider` | `jev` to let a System One judge decide what to keep and draw; empty leaves it to the LLM |
+| `judge.backend` | `cloudflare` (Workers AI `typesafe/jev`), `typesafe` (`jev-latest`) or `local` (Ollama `/v1/systemone`, `nimble`) |
+| `judge.url` | Overrides the endpoint (a gateway in front of the model) |
+| `judge.api_key_env`, `judge.account_id_env` | Names of the variables holding the key and the Cloudflare account |
+| `judge.keep_min`, `judge.listing_max` | Extract a page when `describes_architecture` >= keep_min and `product_listing` < listing_max |
+| `judge.novelty_min` | Draw when the novelty level (0 rehash … 3 new paradigm) reaches it |
+
+The judge is called directly, not through the mesh: the mesh governs agents and their tools, the judge is a model. Thresholds were measured on a 30-page bench; a failed call falls back to the LLM.
 
 ## flux7-mesh policy
 
@@ -143,7 +152,8 @@ scout7/
     search.go            searxng search + fetch URL content
     llm.go               ollama chat helpers
     extract.go           extract architecture from article text
-    evaluate.go          judge relevance, novelty, quality
+    judge.go             System One judge (Jev): keep the page, novelty 0-3
+    evaluate.go          LLM novelty score 0-10 (without a judge)
     output.go            pluggable output (diagram, markdown, json, memory)
     memory.go            mem7 read/write (seen URLs, store results)
   mesh/
